@@ -21,6 +21,8 @@
 #include <directional/cut_mesh_with_singularities.h>
 #include <directional/combing.h>
 
+#define EIGEN_NO_DEBUG 0
+
 namespace directional
 {
 //The data structure for seamless integration
@@ -191,6 +193,7 @@ inline void setup_integration(const directional::CartesianField& field,
     }
     
     // calculate valency of the vertices which lay on the seam
+    // (= number of incident seams)
     VectorXi cutValence = VectorXi::Zero(meshWhole.V.rows());
     for(int i = 0; i < meshWhole.EV.rows(); i++)
     {
@@ -202,7 +205,7 @@ inline void setup_integration(const directional::CartesianField& field,
     }
     
     //establishing transition variables by tracing cut curves
-    VectorXi Halfedge2TransitionIndices = VectorXi::Constant(meshWhole.dcel.halfedges.size(), 32767);
+    VectorXi Halfedge2TransitionIndices = VectorXi::Constant(meshWhole.dcel.halfedges.size(), 32767); // wth is this number?
     VectorXi Halfedge2Matching(meshWhole.dcel.halfedges.size());
     VectorXi isHEClaimed = VectorXi::Zero(meshWhole.dcel.halfedges.size());
     
