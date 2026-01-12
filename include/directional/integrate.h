@@ -60,9 +60,11 @@ inline bool integrate(const directional::CartesianField& field,
     
     avgGradNorm/=(double)(intData.N*meshWhole.F.rows());
     
-    rawField.array()/=avgGradNorm;
-    paramLength/=avgGradNorm;
-    
+    // // Disable any normalization
+    // rawField.array()/=avgGradNorm;
+    // paramLength/=avgGradNorm;
+    paramLength = 1; 
+
     int numVars = intData.linRedMat.cols();
     //constructing face differentials
     //TODO: convert to the common branched gradient operator
