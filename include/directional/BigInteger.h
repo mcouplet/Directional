@@ -60,7 +60,7 @@ public:
     }
     
     long long convert() const{
-        assert(digits.size()<=CONVERTIBLE_SIZE) && "integer is not of a convertible size!");
+        assert((digits.size() <= CONVERTIBLE_SIZE) && "integer is not of a convertible size!");
         long long result=0.0;
         for (int i=digits.size()-1; i>=0 ;i--)
             result = result * BASE + digits[i];
