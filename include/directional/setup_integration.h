@@ -573,8 +573,6 @@ inline void setup_integration(const directional::CartesianField& field,
     }
     //
     
-    // intData.constraintMat.resize(intData.N * currConst, intData.N * (meshWhole.V.rows() + numTransitions));
-    // intData.constraintMatInteger.resize(intData.N * currConst, intData.N * (meshWhole.V.rows() + numTransitions));
     intData.constraintMat.resize(intData.N * currConst + indConstrAlign, intData.N * (meshWhole.V.rows() + numTransitions));
     intData.constraintMatInteger.resize(intData.N * currConst + indConstrAlign, intData.N * (meshWhole.V.rows() + numTransitions));
     cleanTriplets.clear();
