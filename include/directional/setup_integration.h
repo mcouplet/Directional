@@ -516,11 +516,14 @@ inline void setup_integration(const directional::CartesianField& field,
     if(intData.featureAlign){
       int totalCurrConstr = intData.N * currConst;
       for(int iE=0; iE<meshWhole.EF.rows(); iE++){
-        bool forceAlignmentOnEdg = meshWhole.isBoundaryEdge(iE);
+        bool forceAlignmentOnEdg = meshWhole.isBoundaryEdge(iE) || meshWhole.isFeatureEdge(iE);
+        // bool forceAlignmentOnEdg = meshWhole.isBoundaryEdge(iE);
+        // bool forceAlignmentOnEdg = meshWhole.isFeatureEdge(iE);
         if(forceAlignmentOnEdg){
           int v0ind = meshWhole.EV(iE, 0);
           int v1ind = meshWhole.EV(iE, 1);
-          for(int iFloc=0; iFloc<2; iFloc++){ //Loop on all edge faces. Necessary because this edge could be on the seam and constraints will be written on cutMesh dofs
+          // for(int iFloc=0; iFloc<2; iFloc++){ //Loop on all edge faces. Necessary because this edge could be on the seam and constraints will be written on cutMesh dofs// Actually not necessary...
+            int iFloc = 0;
             int faceId = meshWhole.EF(iE, iFloc);
             if(faceId != -1){
               //Find Local vertices index to retreive global vertices index in cutMesh
@@ -567,9 +570,12 @@ inline void setup_integration(const directional::CartesianField& field,
               }
               indConstrAlign++;
             }
-          }
+          // }
         }
       }
+    }
+    if(indConstrAlign > 0){
+      std::cout << "+++++++ Found " << indConstrAlign << " alignment constraints" << std::endl;
     }
     //
     
@@ -655,7 +661,7 @@ inline void setup_integration(const directional::CartesianField& field,
             for (int j=0;j<intData.n;j++)
                 singularIndices(counter++)=intData.n*i+j;
     }
-    
+
     //doing the integer spanning matrix
     intData.singIntSpanMat.resize(intData.n * (meshWhole.V.rows() + numTransitions), intData.n * (meshWhole.V.rows() + numTransitions));
     intData.singIntSpanMatInteger.resize(intData.n * (meshWhole.V.rows() + numTransitions), intData.n * (meshWhole.V.rows() + numTransitions));
