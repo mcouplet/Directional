@@ -8,6 +8,7 @@
 #ifndef DIRECTIONAL_SETUP_INTEGRATION_H
 #define DIRECTIONAL_SETUP_INTEGRATION_H
 
+#include <Eigen/src/Core/util/Constants.h>
 #include <queue>
 #include <vector>
 #include <cmath>
@@ -57,9 +58,10 @@ struct IntegrationData
     //Flags
     bool integralSeamless;                              // Whether to do full translational seamless.
     bool roundSeams;                                    // Whether to round seams or round singularities
+    bool featureAlign;                                  // Whether to align functions with boundaries and feature edges
     bool verbose;                                       // Output the integration log.
     
-    IntegrationData(int _N):lengthRatio(0.02), integralSeamless(false), roundSeams(true), verbose(false){
+  IntegrationData(int _N):lengthRatio(0.02), integralSeamless(false), roundSeams(true), featureAlign(false), verbose(false){
         N=_N;
         n=(N%2==0 ? N/2 : N);
         if (N%2==0)
@@ -509,10 +511,72 @@ inline void setup_integration(const directional::CartesianField& field,
     intData.vertexTrans2CutMat.setFromTriplets(cleanTriplets.begin(), cleanTriplets.end());
     intData.vertexTrans2CutMatInteger.setFromTriplets(cleanTripletsInteger.begin(), cleanTripletsInteger.end());
     
+    // Constraints for parametrization alignment with feature lines and boundaries
+    int indConstrAlign = 0;
+    if(intData.featureAlign){
+      int totalCurrConstr = intData.N * currConst;
+      for(int iE=0; iE<meshWhole.EF.rows(); iE++){
+        bool forceAlignmentOnEdg = meshWhole.isBoundaryEdge(iE);
+        if(forceAlignmentOnEdg){
+          int v0ind = meshWhole.EV(iE, 0);
+          int v1ind = meshWhole.EV(iE, 1);
+          for(int iFloc=0; iFloc<2; iFloc++){ //Loop on all edge faces. Necessary because this edge could be on the seam and constraints will be written on cutMesh dofs
+            int faceId = meshWhole.EF(iE, iFloc);
+            if(faceId != -1){
+              //Find Local vertices index to retreive global vertices index in cutMesh
+              int v0indCut = -1;
+              int v1indCut = -1;
+              for(int jLoc=0; jLoc<3; jLoc++){
+                if (meshWhole.F(faceId, jLoc) == v0ind)
+                  v0indCut = cutF(faceId, jLoc);
+                if (meshWhole.F(faceId, jLoc) == v1ind)
+                  v1indCut = cutF(faceId, jLoc);
+              }
+              if(v0indCut == -1 || v1indCut == -1){ //Sanity check
+                std::cout << "Could not find vertex in cut mesh" << std::endl;
+                std::cout << "v0indCut: " << v0indCut << std::endl;
+                std::cout << "v1indCut: " << v0indCut << std::endl;
+                exit(0);
+              }
+              //Finding which function to constrain
+              auto edgDir = (meshWhole.V.row(v1ind) - meshWhole.V.row(v0ind)).normalized();
+              Eigen::Vector3d frameDirs = (combedField.extField.block<1,3>(faceId, 0));
+              frameDirs.normalize();
+              int indFieldConstr = 0;
+              if(fabs(frameDirs.norm() - 1.) > 1e-12){
+                std::cout << "norm dir: " << frameDirs.norm() << std::endl;
+                exit(0);
+              }
+              if(fabs(edgDir.norm() - 1.) > 1e-12){
+                std::cout << "norm dir edg: " << edgDir.norm() << std::endl;
+                exit(0);
+              }
+              if(fabs(frameDirs.dot(edgDir)) > sqrt(2.)/2.){
+                indFieldConstr = 1;
+              }
+              Eigen::SparseMatrix<int> constrCutInteger;
+              constrCutInteger.resize(1, intData.N * cutV.rows());
+              constrCutInteger.coeffRef(0, intData.N * v0indCut + indFieldConstr) = 1;
+              constrCutInteger.coeffRef(0, intData.N * v1indCut + indFieldConstr) = -1;
+              Eigen::SparseMatrix<int, Eigen::RowMajor> constrTransInteger = constrCutInteger * intData.vertexTrans2CutMatInteger;
+              for(int k=0; k<constrTransInteger.outerSize(); ++k){
+                for(Eigen::SparseMatrix<int, Eigen::RowMajor>::InnerIterator it(constrTransInteger, k); it; ++it){
+                  constTriplets.emplace_back(totalCurrConstr + indConstrAlign, it.col(), (double)it.value());
+                  constTripletsInteger.emplace_back(totalCurrConstr + indConstrAlign, it.col(), it.value());
+                }
+              }
+              indConstrAlign++;
+            }
+          }
+        }
+      }
+    }
     //
     
-    intData.constraintMat.resize(intData.N * currConst, intData.N * (meshWhole.V.rows() + numTransitions));
-    intData.constraintMatInteger.resize(intData.N * currConst, intData.N * (meshWhole.V.rows() + numTransitions));
+    // intData.constraintMat.resize(intData.N * currConst, intData.N * (meshWhole.V.rows() + numTransitions));
+    // intData.constraintMatInteger.resize(intData.N * currConst, intData.N * (meshWhole.V.rows() + numTransitions));
+    intData.constraintMat.resize(intData.N * currConst + indConstrAlign, intData.N * (meshWhole.V.rows() + numTransitions));
+    intData.constraintMatInteger.resize(intData.N * currConst + indConstrAlign, intData.N * (meshWhole.V.rows() + numTransitions));
     cleanTriplets.clear();
     cleanTripletsInteger.clear();
     for(int i = 0; i < constTriplets.size(); i++){
