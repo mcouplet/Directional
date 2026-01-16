@@ -50,7 +50,8 @@ inline bool integrate(const directional::CartesianField& field,
     const directional::TriMesh& meshWhole = *((PCFaceTangentBundle*)field.tb)->mesh;
     
     VectorXd edgeWeights = VectorXd::Constant(meshWhole.FE.maxCoeff() + 1, 1.0);
-    double paramLength = (meshWhole.V.colwise().maxCoeff()-meshWhole.V.colwise().minCoeff()).norm()*intData.lengthRatio;
+    // double paramLength = (meshWhole.V.colwise().maxCoeff()-meshWhole.V.colwise().minCoeff()).norm()*intData.lengthRatio;
+    double paramLength = 1; // Disable any normalization, use the raw field specified by user. This allows us to control number of quads
     
     MatrixXd rawField = field.extField;
     double avgGradNorm=0;
@@ -60,10 +61,6 @@ inline bool integrate(const directional::CartesianField& field,
     
     avgGradNorm/=(double)(intData.N*meshWhole.F.rows());
     
-    // // Disable any normalization
-    // rawField.array()/=avgGradNorm;
-    // paramLength/=avgGradNorm;
-    paramLength = 1; 
 
     int numVars = intData.linRedMat.cols();
     //constructing face differentials
@@ -172,7 +169,7 @@ inline bool integrate(const directional::CartesianField& field,
     VectorXd fullx(numVars); fullx.setZero();
     for(int intIter = 0; intIter < fixedMask.sum(); intIter++)
     {
-        std::cout << intIter << "/" << fixedMask.sum() << "\t\r";
+        std::cout << "\r" << intIter << "/" << fixedMask.sum() << std::flush;
 
         //the non-fixed variables to all variables
         var2AllMat.resize(numVars, numVars - alreadyFixed.sum());
