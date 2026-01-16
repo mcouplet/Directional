@@ -46,6 +46,8 @@ struct IntegrationData
     Eigen::VectorXi fixedIndices;                       // Translation fixing indices
     Eigen::VectorXd fixedValues;                        // Translation fixed values
     Eigen::VectorXi singularIndices;                    // Singular-vertex indices
+  
+    std::vector<int> dofFeatureIndices;                 // Indices to clip for integer constraint on feature lines
     
     //integer versions, for exact seamless parameterizations (good for error-free meshing)
     Eigen::SparseMatrix<int> vertexTrans2CutMatInteger;
@@ -513,6 +515,7 @@ inline void setup_integration(const directional::CartesianField& field,
     
     // Constraints for parametrization alignment with feature lines and boundaries
     int indConstrAlign = 0;
+    intData.dofFeatureIndices.clear();
     if(intData.featureAlign){
       int totalCurrConstr = intData.N * currConst;
       for(int iE=0; iE<meshWhole.EF.rows(); iE++){
@@ -569,6 +572,9 @@ inline void setup_integration(const directional::CartesianField& field,
                 }
               }
               indConstrAlign++;
+              if(meshWhole.isMasterFeatureEdge(iE)){
+                intData.dofFeatureIndices.push_back(intData.n*v0indCut + indFieldConstr);
+              }
             }
           // }
         }
@@ -648,7 +654,7 @@ inline void setup_integration(const directional::CartesianField& field,
         for (firstSing=0;firstSing<isSingular.size();firstSing++)
             if (isSingular(firstSing))
                 break;
-        //firstSing=0; //like before
+        // firstSing=0; //like before
         for (int j=0;j<intData.n;j++)
             intData.fixedIndices(j)=intData.n*firstSing+j;
     }
@@ -694,7 +700,8 @@ inline void setup_integration(const directional::CartesianField& field,
     
     intData.singularIndices=singularIndices;
     intData.fixedValues.resize(intData.n);
-    intData.fixedValues.setConstant(0);
+    // intData.fixedValues.setConstant(-0.1);
+    intData.fixedValues.setConstant(0.);
     
     meshCut.set_mesh(cutV, cutF);
     

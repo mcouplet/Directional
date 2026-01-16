@@ -119,6 +119,9 @@ inline bool integrate(const directional::CartesianField& field,
         }else {
             for (int i = 0; i < intData.singularIndices.size(); i++)
                 fixedMask(intData.singularIndices(i)) = 1;
+            std::cout << "Adding " << intData.dofFeatureIndices.size() << " integer constraints for feature lines" << std::endl;
+            for (int i = 0; i < intData.dofFeatureIndices.size(); i++)
+                fixedMask(intData.dofFeatureIndices[i]) = 1;
         }
     }
     
@@ -281,6 +284,10 @@ inline bool integrate(const directional::CartesianField& field,
             double func = fullx(minIntDiffIndex) ;
             double funcInteger=std::round(func);
             fixedValues(minIntDiffIndex) = /*pinvSymm*projMat**/funcInteger;
+            //Else meshing is crashing
+            // auto itCheck = std::find(intData.dofFeatureIndices.begin(), intData.dofFeatureIndices.end(), minIntDiffIndex);
+            // if(itCheck!=intData.dofFeatureIndices.end())
+            //   fixedValues(minIntDiffIndex) -= 0.001;
         }
         //in case all singularities are rounded in the rounding-singularities mode, but there are left unrounded seams (like topological handles).
         if ((alreadyFixed.sum()==fixedMask.sum())&&(!intData.roundSeams)&(!roundedSingularities)&&(intData.integralSeamless)) {
