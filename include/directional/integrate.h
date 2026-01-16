@@ -172,6 +172,8 @@ inline bool integrate(const directional::CartesianField& field,
     VectorXd fullx(numVars); fullx.setZero();
     for(int intIter = 0; intIter < fixedMask.sum(); intIter++)
     {
+        std::cout << intIter << "/" << fixedMask.sum() << "\t\r";
+
         //the non-fixed variables to all variables
         var2AllMat.resize(numVars, numVars - alreadyFixed.sum());
         int varCounter = 0;
