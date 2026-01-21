@@ -36,12 +36,15 @@ namespace directional
 //  meshCut:            Cut mesh (obtained from setup_integration())
 // Output:
 //  NFunction:          #cV x N parameterization functions per cut vertex (full version with all symmetries unpacked)
-//  NCornerFunctions   (3*N) x #F parameterization functions per corner of whole mesh
+//  NCornerFunctions    #F x (3*N) parameterization functions per corner of whole mesh
+//  residual            #F residual of Poisson problem per face: sum for i=1:N of |grad(i) - field(i)|^2
 inline bool integrate(const directional::CartesianField& field,
                       IntegrationData& intData,
                       const directional::TriMesh& meshCut,
                       Eigen::MatrixXd& NFunction,
-                      Eigen::MatrixXd& NCornerFunctions)
+                      Eigen::MatrixXd& NCornerFunctions,
+                      Eigen::VectorXd& residual
+                    )
 
 
 {
@@ -255,8 +258,14 @@ inline bool integrate(const directional::CartesianField& field,
         }
         x = lusolver.solve(b);
         
+        // ChatGPT did that, tread carefully
         fullx = var2AllMat * x.head(numVars - alreadyFixed.sum()) + fixedValues;
-        
+        Eigen::VectorXd r_ls = Efull * fullx - gamma; // least-squares residual
+        Eigen::VectorXd r_weighted = r_ls.array() * M1.diagonal().array().sqrt(); // the actual weighted residual (3*N*#F)
+        residual.resize(meshWhole.F.rows()); // the actual residual per face that we return
+        for (int i = 0; i < meshWhole.F.rows(); i++) {
+            residual(i) = r_weighted.segment(3*intData.N*i, 3*intData.N).norm();
+        }
         
         if((alreadyFixed - fixedMask).sum() == 0)
             break;
