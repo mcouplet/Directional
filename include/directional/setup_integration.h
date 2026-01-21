@@ -46,7 +46,9 @@ struct IntegrationData
     Eigen::VectorXi fixedIndices;                       // Translation fixing indices
     Eigen::VectorXd fixedValues;                        // Translation fixed values
     Eigen::VectorXi singularIndices;                    // Singular-vertex indices
-  
+
+    Eigen::SparseMatrix<double> constraintMatVanilla;          // Linear constraints (resulting from non-singular nodes) Vanilla
+
     std::vector<int> dofFeatureIndices;                 // Indices to clip for integer constraint on feature lines
     
     //integer versions, for exact seamless parameterizations (good for error-free meshing)
@@ -498,6 +500,17 @@ inline void setup_integration(const directional::CartesianField& field,
     
     vector< Triplet< double > > cleanTriplets;
     vector< Triplet< int > > cleanTripletsInteger;
+
+    intData.constraintMatVanilla.resize(intData.N * currConst, intData.N * (meshWhole.V.rows() + numTransitions));
+    cleanTriplets.clear();
+    cleanTripletsInteger.clear();
+    for(int i = 0; i < constTriplets.size(); i++){
+      if(constTripletsInteger[i].value() != 0){
+        cleanTripletsInteger.push_back(constTripletsInteger[i]);
+        cleanTriplets.push_back(constTriplets[i]);
+      }
+    }
+    intData.constraintMatVanilla.setFromTriplets(cleanTriplets.begin(), cleanTriplets.end());
     
     intData.vertexTrans2CutMat.resize(intData.N * cutV.rows(), intData.N * (meshWhole.V.rows() + numTransitions));
     intData.vertexTrans2CutMatInteger.resize(intData.N * cutV.rows(), intData.N * (meshWhole.V.rows() + numTransitions));
@@ -572,7 +585,7 @@ inline void setup_integration(const directional::CartesianField& field,
                 }
               }
               indConstrAlign++;
-              if(meshWhole.isMasterFeatureEdge(iE)){
+              if(meshWhole.isMasterFeatureEdge(iE) && !isSingular(v0ind) && !isSingular(v1ind)){
                 intData.dofFeatureIndices.push_back(intData.n*v0indCut + indFieldConstr);
               }
             }

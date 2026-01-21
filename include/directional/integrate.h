@@ -8,6 +8,7 @@
 #ifndef DIRECTIONAL_INTEGRATE_H
 #define DIRECTIONAL_INTEGRATE_H
 
+#include <eigen3/Eigen/src/Core/Matrix.h>
 #include <iostream>
 #include <fstream>
 #include <queue>
@@ -21,6 +22,7 @@
 #include <directional/principal_matching.h>
 #include <directional/setup_integration.h>
 #include <directional/branched_gradient.h>
+#include <random>
 
 
 namespace directional
@@ -283,16 +285,13 @@ inline bool integrate(const directional::CartesianField& field,
             double func = fullx(minIntDiffIndex) ;
             double funcInteger=std::round(func);
             fixedValues(minIntDiffIndex) = /*pinvSymm*projMat**/funcInteger;
-            //Else meshing is crashing
-            // auto itCheck = std::find(intData.dofFeatureIndices.begin(), intData.dofFeatureIndices.end(), minIntDiffIndex);
-            // if(itCheck!=intData.dofFeatureIndices.end())
-            //   fixedValues(minIntDiffIndex) -= 0.001;
         }
         //in case all singularities are rounded in the rounding-singularities mode, but there are left unrounded seams (like topological handles).
         if ((alreadyFixed.sum()==fixedMask.sum())&&(!intData.roundSeams)&(!roundedSingularities)&&(intData.integralSeamless)) {
             for (int i = 0; i < intData.integerVars.size(); i++)
-                for (int j = 0; j < intData.n; j++)
+              for (int j = 0; j < intData.n; j++){
                     fixedMask(intData.n * intData.integerVars(i) + j) = 1;
+              }
             roundedSingularities = true;
         }
         
@@ -303,6 +302,53 @@ inline bool integrate(const directional::CartesianField& field,
                 xprev(varCounter++) = fullx(i);
         
         xprev.tail(Cpart.rows()) = x.tail(Cpart.rows());
+    }
+
+    //Perturbation on parametrization for meshing. Necessary as feature lines are snapped on integer variables.
+    {
+      if(intData.integralSeamless && 1){
+        std::cout << std::endl << "++ Shaking parametrization" << std::endl;
+        Eigen::VectorXi extraIntVars = intData.integerVars;
+        int nExtra = intData.integerVars.size();
+        Eigen::SparseMatrix<double> myCvan = intData.constraintMatVanilla * intData.linRedMat * intData.singIntSpanMat * intData.intSpanMat;
+        Eigen::SparseMatrix<double> myC;
+        myC.resize(myCvan.rows() + intData.singularIndices.size() + intData.n*nExtra, myCvan.cols());
+        vector<Triplet<double>> myCTriplets;
+        for(int k = 0; k < myCvan.outerSize(); ++k)
+          {
+            for (SparseMatrix<double>::InnerIterator it(myCvan, k); it; ++it)
+              myCTriplets.emplace_back(it.row(), it.col(), it.value());
+          }
+        for (int i = 0; i < intData.singularIndices.size(); i++)
+          myCTriplets.emplace_back(myCvan.rows() + i, intData.singularIndices(i), 1.0);
+        for (int i = 0; i < nExtra; i++)
+              for (int j = 0; j < intData.n; j++)
+                myCTriplets.emplace_back(myCvan.rows() + intData.singularIndices.size() + intData.n*i + j, intData.n * intData.integerVars(i) + j, 1.0);
+        
+        myC.setFromTriplets(myCTriplets.begin(), myCTriplets.end());
+        
+        Eigen::SparseMatrix<double> Ct = myC.transpose();
+        SparseQR<SparseMatrix<double>, COLAMDOrdering<int> > qr;
+        qr.compute(Ct);
+        int nn = myC.cols();
+        int rr = (int)qr.rank();
+        int kk = nn-rr;
+        VectorXd pertComp = VectorXd::Zero(nn);
+        std::mt19937 gen(std::random_device{}());
+        std::uniform_real_distribution<double> distVal(0.0001, 0.001);
+        std::uniform_int_distribution<int> distSign(0, 1);
+        for(int k=0; k<kk; k++){
+          double val  = distVal(gen);
+          double sign = distSign(gen) ? 1.0 : -1.0;
+          pertComp[rr+k] = sign*val;
+        }
+        VectorXd pert = qr.matrixQ() * pertComp;
+        VectorXd resCheck = myC * pert;
+        if(resCheck.norm() > 1e-10){
+          std::cout << "WARNING: shaking failed" << std::endl;
+        }
+        fullx = fullx + pert;
+      }
     }
     
     //the results are packets of N functions for each vertex, and need to be allocated for corners
