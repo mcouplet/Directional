@@ -51,6 +51,13 @@ struct IntegrationData
 
     std::vector<int> dofFeatureIndices;                 // Indices to clip for integer constraint on feature lines
     
+    Eigen::VectorXi isSingularCut;                      // Flag singular vertices in cut mesh
+    Eigen::VectorXi isFeatureVertexCut;                 // Flag feature vertices in cut mesh
+    std::set<int> featureDofs;
+    
+    // std::map<int, std::pair<int,int>> cutEdgeMap;            // vA -> (vB, matching)
+    std::vector<std::tuple<int,int,int,int,int>> cutEdgeMap; // (vA1, vA2, vB1, vB2, matching), for seamless constraints
+
     //integer versions, for exact seamless parameterizations (good for error-free meshing)
     Eigen::SparseMatrix<int> vertexTrans2CutMatInteger;
     Eigen::SparseMatrix<int> constraintMatInteger;
@@ -162,6 +169,15 @@ inline void setup_integration(const directional::CartesianField& field,
             isBoundary(meshWhole.HV(i)) = 1;
             isSingular(meshWhole.HV(i)) = 0; //boundary vertices cannot be singular
         }
+    
+    // Flag feature vertices on whole mesh
+    VectorXi isFeatureVertexWhole = VectorXi::Zero(meshWhole.V.rows()); 
+    for (int e = 0; e < meshWhole.EV.rows(); e++) {
+        if (meshWhole.isFeatureEdge(e)) {
+            isFeatureVertexWhole(meshWhole.EV(e,0)) = 1;
+            isFeatureVertexWhole(meshWhole.EV(e,1)) = 1;
+        }
+    }
     
     // here we compute a permutation matrix
     vector<MatrixXi> constParmMatrices(intData.N);
@@ -284,6 +300,15 @@ inline void setup_integration(const directional::CartesianField& field,
     for(int i = 0; i < cutVlist.size(); i++)
         cutV.row(i) = cutVlist[i];
     
+    // Flag singularities and feature vertices in cut mesh
+    intData.isSingularCut = Eigen::VectorXi::Zero(cutV.rows());
+    intData.isFeatureVertexCut = VectorXi::Zero(cutV.rows());
+    for (int vc = 0; vc < cutV.rows(); vc++) { // iterate over cut mesh vertices
+        int vw = cut2whole[vc]; // vertex in whole mesh
+        intData.isSingularCut(vc) = isSingular(vw);
+        intData.isFeatureVertexCut(vc) = isFeatureVertexWhole(vw);
+    }
+
     //starting from each cut-graph node, we trace cut curves
     for(int i = 0;  i < meshWhole.V.rows(); i++)
     {
@@ -529,6 +554,7 @@ inline void setup_integration(const directional::CartesianField& field,
     // Constraints for parametrization alignment with feature lines and boundaries
     int indConstrAlign = 0;
     intData.dofFeatureIndices.clear();
+    // intData.featureVertexCutWhichField = Eigen::VectorXi::Constant(cutV.rows(), -1);
     if(intData.featureAlign){
       int totalCurrConstr = intData.N * currConst;
       for(int iE=0; iE<meshWhole.EF.rows(); iE++){
@@ -538,7 +564,7 @@ inline void setup_integration(const directional::CartesianField& field,
         if(forceAlignmentOnEdg){
           int v0ind = meshWhole.EV(iE, 0);
           int v1ind = meshWhole.EV(iE, 1);
-          // for(int iFloc=0; iFloc<2; iFloc++){ //Loop on all edge faces. Necessary because this edge could be on the seam and constraints will be written on cutMesh dofs// Actually not necessary...
+        //   for(int iFloc=0; iFloc<2; iFloc++){ //Loop on all edge faces. Necessary because this edge could be on the seam and constraints will be written on cutMesh dofs// Actually not necessary...
             int iFloc = 0;
             int faceId = meshWhole.EF(iE, iFloc);
             if(faceId != -1){
@@ -575,8 +601,18 @@ inline void setup_integration(const directional::CartesianField& field,
               }
               Eigen::SparseMatrix<int> constrCutInteger;
               constrCutInteger.resize(1, intData.N * cutV.rows());
+              // HERE
               constrCutInteger.coeffRef(0, intData.N * v0indCut + indFieldConstr) = 1;
               constrCutInteger.coeffRef(0, intData.N * v1indCut + indFieldConstr) = -1;
+            //   std::cout << v0indCut << std::endl;
+            //   std::cout << v1indCut << std::endl;
+            //   std::cout << intData.featureVertexCutWhichField.size() << std::endl;
+              
+            //   std::cout << indFieldConstr << std::endl;
+            //   intData.featureVertexCutWhichField(v0indCut) = indFieldConstr;
+            //   intData.featureVertexCutWhichField(v1indCut) = indFieldConstr;
+              if (!intData.isSingularCut(v0indCut)) intData.featureDofs.insert(intData.n*v0indCut + indFieldConstr);
+              if (!intData.isSingularCut(v1indCut)) intData.featureDofs.insert(intData.n*v1indCut + indFieldConstr);
               Eigen::SparseMatrix<int, Eigen::RowMajor> constrTransInteger = constrCutInteger * intData.vertexTrans2CutMatInteger;
               for(int k=0; k<constrTransInteger.outerSize(); ++k){
                 for(Eigen::SparseMatrix<int, Eigen::RowMajor>::InnerIterator it(constrTransInteger, k); it; ++it){
@@ -589,7 +625,7 @@ inline void setup_integration(const directional::CartesianField& field,
                 intData.dofFeatureIndices.push_back(intData.n*v0indCut + indFieldConstr);
               }
             }
-          // }
+        //   }
         }
       }
     }
@@ -715,6 +751,48 @@ inline void setup_integration(const directional::CartesianField& field,
     intData.fixedValues.resize(intData.n);
     // intData.fixedValues.setConstant(-0.1);
     intData.fixedValues.setConstant(0.);
+
+    // Setup cut edge map
+    Eigen::VectorXi visitedHE = Eigen::VectorXi::Zero(meshWhole.dcel.halfedges.size());
+    for (int h = 0; h < meshWhole.dcel.halfedges.size(); h++) {
+        if (!isHEcut(h)) continue;
+        int ht = meshWhole.twinH(h);
+        if (ht == -1) continue; // boundary
+        if (visitedHE(ht)) continue;
+        visitedHE(h) = visitedHE(ht) = 1;
+
+        // Find local corner index in local indices
+        int fA = meshWhole.HF(h);
+        int fB = meshWhole.HF(ht);
+
+        // A,B are the faces, 1,2 are the vertices
+
+        int vA1_whole = meshWhole.HV(h);
+        int vA2_whole = meshWhole.HV(meshWhole.nextH(h));
+        int vB1_whole = meshWhole.HV(meshWhole.nextH(ht));
+        int vB2_whole = meshWhole.HV(ht);
+        
+        int vA1_cut = -1;
+        int vA2_cut = -1;
+        int vB1_cut = -1;
+        int vB2_cut = -1;
+
+        for (int j = 0; j < 3; j++) {
+            if (meshWhole.F(fA, j) == vA1_whole)
+                vA1_cut = cutF(fA, j);
+            if (meshWhole.F(fA, j) == vA2_whole)
+                vA2_cut = cutF(fA, j);
+            if (meshWhole.F(fB, j) == vB1_whole)
+                vB1_cut = cutF(fB, j);
+            if (meshWhole.F(fB, j) == vB2_whole)
+                vB2_cut = cutF(fB, j);
+        }
+
+        assert(vA1_cut >= 0 && vB1_cut >= 0 && vA2_cut >= 0 && vB2_cut >= 0);    
+
+        int matching = Halfedge2Matching(h);
+        intData.cutEdgeMap.push_back({vA1_cut, vA2_cut, vB1_cut, vB2_cut, matching});
+    }
     
     meshCut.set_mesh(cutV, cutF);
     

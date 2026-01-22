@@ -269,19 +269,22 @@ inline bool integrate(const directional::CartesianField& field,
         
         if((alreadyFixed - fixedMask).sum() == 0)
             break;
-        
+
+        // If some variables are already exactly integer, we can fix them and forget about it!
         double minIntDiff = std::numeric_limits<double>::max();
         int minIntDiffIndex = -1;
         for (int i = 0; i < numVars; i++)
         {
-            if ((fixedMask(i)) && (!alreadyFixed(i)))
+            if ((fixedMask(i)) && (!alreadyFixed(i))) // if variable is not already integer
             {
-                double currIntDiff =0;
+                // Check if var is actually integer
                 double func = fullx(i); //fullx.segment(intData.d*i,intData.d);
-                //for (int j=0;j<intData.d;j++)
-                currIntDiff += std::fabs(func - std::round(func));
-                if (currIntDiff < minIntDiff)
-                {
+                double funcInteger = std::round(func);
+                double currIntDiff = std::fabs(func - funcInteger);
+                if (currIntDiff < 1e-12) { // integer already!
+                    alreadyFixed(i) = 1;
+                    fixedValues(i) = funcInteger;
+                } else if (currIntDiff < minIntDiff) { // candidate for rounding
                     minIntDiff = currIntDiff;
                     minIntDiffIndex = i;
                 }
@@ -291,7 +294,8 @@ inline bool integrate(const directional::CartesianField& field,
         if (minIntDiffIndex != -1)
         {
             alreadyFixed(minIntDiffIndex) = 1;
-            double func = fullx(minIntDiffIndex) ;
+            double func = fullx(minIntDiffIndex);
+            // std::cout << func << std::endl;
             double funcInteger=std::round(func);
             fixedValues(minIntDiffIndex) = /*pinvSymm*projMat**/funcInteger;
         }
