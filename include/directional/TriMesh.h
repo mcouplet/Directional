@@ -307,11 +307,11 @@ public:
             }while(hebegin!=heiterate);
         }
         
-        isFeatureEdge=Eigen::VectorXi::Zero(EV.size());
-        isMasterFeatureEdge=Eigen::VectorXi::Zero(EV.size());   
+        isFeatureEdge=Eigen::VectorXi::Zero(EV.rows());
+        isMasterFeatureEdge=Eigen::VectorXi::Zero(EV.rows());   
     }
     void inline set_feature_edges(const Eigen::MatrixXi& fId_edgLocId){
-      isFeatureEdge=Eigen::VectorXi::Zero(EV.size());
+      isFeatureEdge=Eigen::VectorXi::Zero(EV.rows());
       // std::cout << "check edges in trimesh" << std::endl;
       for(int iF=0; iF<fId_edgLocId.rows(); iF++){
         int fId = fId_edgLocId(iF, 0);
@@ -340,7 +340,7 @@ public:
       }
     }
     void inline set_master_feature_edges(const Eigen::MatrixXi& fId_edgLocId){
-      isMasterFeatureEdge=Eigen::VectorXi::Zero(EV.size());
+      isMasterFeatureEdge=Eigen::VectorXi::Zero(EV.rows());
       // std::cout << "check edges in trimesh" << std::endl;
       for(int iF=0; iF<fId_edgLocId.rows(); iF++){
         int fId = fId_edgLocId(iF, 0);

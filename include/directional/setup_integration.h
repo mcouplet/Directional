@@ -621,8 +621,18 @@ inline void setup_integration(const directional::CartesianField& field,
                 }
               }
               indConstrAlign++;
-              if(meshWhole.isMasterFeatureEdge(iE) && !isSingular(v0ind) && !isSingular(v1ind)){
-                intData.dofFeatureIndices.push_back(intData.n*v0indCut + indFieldConstr);
+              // If it's a master feature edge, just constrain one of its two vertices to be integer
+              // Why do we need the vertex to not be singular? To avoid duplicate variables?
+            //   if(meshWhole.isMasterFeatureEdge(iE) && !isSingular(v0ind) && !isSingular(v1ind)){
+            //     intData.dofFeatureIndices.push_back(intData.n*v0indCut + indFieldConstr);
+            //   }
+              if (meshWhole.isMasterFeatureEdge(iE)) {
+                if (!isSingular(v0ind))
+                  intData.dofFeatureIndices.push_back(intData.n*v0indCut + indFieldConstr);
+                else if (!isSingular(v1ind))
+                  intData.dofFeatureIndices.push_back(intData.n*v1indCut + indFieldConstr);
+                else
+                  std::cout << "Could not constrain master feature edge to be integer because it's two singularities!" << std::endl;
               }
             }
         //   }

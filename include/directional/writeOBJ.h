@@ -129,6 +129,17 @@ bool inline writeOBJWithUV(
         file << "\n";
     }
 
+    // Write feature edges as line primitives
+    if (mesh.isFeatureEdge.size() == mesh.EV.rows()) {
+        for (int e = 0; e < mesh.EV.rows(); ++e) {
+            if (mesh.isFeatureEdge[e]) {
+                int v1 = mesh.EV(e, 0) + 1;  // OBJ is 1-indexed
+                int v2 = mesh.EV(e, 1) + 1;
+                file << "l " << v1 << " " << v2 << "\n";
+            }
+        }
+    }
+
     file.close();
     return true;
 }
